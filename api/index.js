@@ -18,45 +18,45 @@ const STRIP_HEADERS = new Set([
   "x-forwarded-port",
 ]);
 
-export default async function handler(req) {
+export default async function handler(request) {
   if (!TARGET_BASE) {
     return new Response("Misconfigured: TARGET_DOMAIN is not set", { status: 500 });
   }
 
   try {
-    const pathStart = req.url.indexOf("/", 8);
+    const pathStart = request.url.indexOf("/", 8);
     const targetUrl =
-      pathStart === -1 ? TARGET_BASE + "/" : TARGET_BASE + req.url.slice(pathStart);
+      pathStart === -1 ? TARGET_BASE + "/" : TARGET_BASE + request.url.slice(pathStart);
 
-    const out = new Headers();
-    let clientIp = null;
-    for (const [k, v] of req.headers) {
-      if (STRIP_HEADERS.has(k)) continue;
-      if (k.startsWith("x-vercel-")) continue;
-      if (k === "x-real-ip") {
-        clientIp = v;
+    const outgoingHeaders = new Headers();
+    let clientIpAddress = null;
+    for (const [key, value] of request.headers) {
+      if (STRIP_HEADERS.has(key)) continue;
+      if (key.startsWith("x-vercel-")) continue;
+      if (key === "x-real-ip") {
+        clientIpAddress = value;
         continue;
       }
-      if (k === "x-forwarded-for") {
-        if (!clientIp) clientIp = v;
+      if (key === "x-forwarded-for") {
+        if (!clientIpAddress) clientIpAddress = value;
         continue;
       }
-      out.set(k, v);
+      outgoingHeaders.set(key, value);
     }
-    if (clientIp) out.set("x-forwarded-for", clientIp);
+    if (clientIpAddress) outgoingHeaders.set("x-forwarded-for", clientIpAddress);
 
-    const method = req.method;
-    const hasBody = method !== "GET" && method !== "HEAD";
+    const requestMethod = request.method;
+    const hasRequestBody = requestMethod !== "GET" && requestMethod !== "HEAD";
 
     return await fetch(targetUrl, {
-      method,
-      headers: out,
-      body: hasBody ? req.body : undefined,
+      method: requestMethod,
+      headers: outgoingHeaders,
+      body: hasRequestBody ? request.body : undefined,
       duplex: "half",
       redirect: "manual",
     });
-  } catch (err) {
-    console.error("relay error:", err);
+  } catch (error) {
+    console.error("relay error:", error);
     return new Response("Bad Gateway: Tunnel Failed", { status: 502 });
   }
 }
